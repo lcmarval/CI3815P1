@@ -10,23 +10,32 @@ errorLec:	.asciiz "Error al leer el tamaño del bloque"
 
 .text
 # funcion init:
-# recibe como parametro $a0: size, $a1: StatusLec
-# retorna 0 si fue exitoso, negativo en caso contrario en $a1
-# retorna en $v0 la direccion del bloque de memoria y $a0 tiene la cantidad de bytes que se reservaron
+# recibe como parametro $a0: size,
+# $a1: StatusLec retorna 0 si fue exitoso, negativo en caso contrario
+# retorna en $v0 la direccion del bloque de memoria 
+# $v1 codigo (0: ok; -1: entrada incorrecta
+# $a0 tiene la cantidad de bytes que se reservaron
+
 fun_init:	sw $fp, ($sp)
 		move $fp, $sp
 		addi $sp, $sp, -4
-		la $a0, msgInit
+		la $a0, msgInit # quizas esto no sea necesaria puede que siempre quiera pasar los parametros
 		li $v0, 51
 		syscall
-		# se deberia verificar que el parametro no es negativo
+		blez $a0, initError1  # se verifica que el parametro no es menor igual que cero
 		sw $a0, nMem
-		#bltz $a1, ImpError  
+		bltz $a1, initError2  # error en lectura
 		li $v0, 9
 		syscall
 		sw $v0, dir1
 		sw $v0, dirDisp
-		#addi $sp, $sp, 4    Errores con la pila
+		li $v1, 0
+		b initFin
+initError1:	li $v1, -1
+		b initFin
+initError2:	li $v1, -2  # puede que no sea necesaria si lo es se puedecambia por cargar el valor de $a1
+		b initFin
+initFin:	#addi $sp, $sp, 4    Errores con la pila
 		#lw $fp, ($sp)
 		#move $sp, $fp
 		jr $ra
@@ -39,17 +48,25 @@ fun_init:	sw $fp, ($sp)
 fun_malloc:	sw $fp, ($sp)
 		move $fp, $sp
 		addi $sp, $sp, -4
+		blez $a0, mallocError1  # se verifica que el parametro no es menor igual que cero
 		lw $t0, nMem
 		add $t1, $a0, $zero
 		sub $t2, $t0, $t1
-		bltz $t2, error  # error se pide mas espacio del reservado inicialmente
+		bltz $t2, mallocError2  # error se pide mas espacio del disponible inicialmente
 		lw $t3, dir1
 		add $t3, $t3, $t0
 		lw $a1, dirDisp
 		add $t4, $a1, $t1
-		bgt $t4, $t3, error # no hay suficiente espacio disponible
+		bgt $t4, $t3, mallocError3 # no hay suficiente espacio disponible
 		sw $t4, dirDisp
-		#addi $sp, $sp, 4    Errores con la pila
+		b mallocFin
+mallocError1:	li $v0, -3
+		b mallocFin
+mallocError2:	li $v0, -4  
+		b mallocFin
+mallocError3:	li $v0, -5  
+		b mallocFin
+mallocFin:	#addi $sp, $sp, 4    Errores con la pila
 		#lw $fp, ($sp)
 		#move $sp, $fp
 		jr $ra
@@ -62,16 +79,27 @@ fun_malloc:	sw $fp, ($sp)
 fun_realloc:	sw $fp, ($sp)
 		move $fp, $sp
 		addi $sp, $sp, -4
-		#
+		blez $a1, reallocError1  # se verifica que el parametro no es menor igual que cero
 		lw $t0, nMem
+		lw $t2, dir1
+		add $t2, $t2, $t0
+		bgt $a0, $t2, reallocError2  # se verifica que el parametro pertenece a la mem
 		bgt $a1, $t0, caso2
 		sub $t1, $t0, $a1
 		sw $t1, nMem
 		sw $a0, dirDisp
 		b fin_realloc
-caso2:		# syscall 9 
-		# traspasar lo que estaba antes en mem al nuevo syscall 9
-		
+caso2:		sub $t1, $a1, $t0   # diferencia de memorias
+		move $a0, $t1  # ???
+		li $v0, 9
+		syscall	# se pide la cantidad extra de bits que se quiere
+		add $v1, $a0, $t0  # calculo direccion de los nuevos bytes
+		sw $a1, nMem
+		b fin_realloc
+reallocError1:	li $v0, -6
+		b fin_realloc
+reallocError2:	li $v0, -7  
+		b fin_realloc		
 fin_realloc:	#addi $sp, $sp, 4    Errores con la pila
 		#lw $fp, ($sp)
 		#move $sp, $fp
